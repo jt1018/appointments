@@ -1,0 +1,481 @@
+﻿Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$username = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
+$connectionString = "Server=SERVER;Database=DATABASE;Integrated Security=True;"
+
+# Function to submit appointment
+# Function to submit appointment
+function Submit-Appointment {
+    $type = $resultListBox.SelectedItem
+    if (-not $type) {
+        [System.Windows.Forms.MessageBox]::Show("Please select an appointment type.")
+        return
+    }
+
+    try {        
+        # Open SQL connection
+        $connection = New-Object System.Data.SqlClient.SqlConnection $connectionString        
+        $connection.Open()
+
+        # Define check query to see if the user already has a completed appointment
+        $checkQuery = @"
+SELECT COUNT(*) 
+FROM Appointments 
+WHERE Username = @Username AND AppointmentType = @AppointmentType AND Status = 'Completed'
+"@
+        
+        # Check if the user already has a completed appointment
+        $command = $connection.CreateCommand()
+        $command.CommandText = $checkQuery
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Username", [Data.SqlDbType]::NVarChar, 255))).Value = $username
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@AppointmentType", [Data.SqlDbType]::NVarChar, 255))).Value = $type
+        $existingCompletedAppointments = $command.ExecuteScalar()
+
+        if ($existingCompletedAppointments -gt 0) {
+            # If the user has a completed appointment of the same type, show an error
+            [System.Windows.Forms.MessageBox]::Show("You already have a completed appointment of this type.")
+            $connection.Close()
+            return
+        }
+
+        # Define check query to see if the user already has a pending or in-progress appointment
+        $checkQuery = @"
+SELECT COUNT(*) 
+FROM Appointments 
+WHERE Username = @Username AND AppointmentType = @AppointmentType AND Status IN ('Pending', 'In Progress')
+"@
+
+        # Check for existing appointment (Pending or In Progress)
+        $checkCommand = $connection.CreateCommand()
+        $checkCommand.CommandText = $checkQuery
+        $checkCommand.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Username", [Data.SqlDbType]::NVarChar, 255))).Value = $username
+        $checkCommand.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@AppointmentType", [Data.SqlDbType]::NVarChar, 255))).Value = $type
+        $existingCount = $checkCommand.ExecuteScalar()
+
+        if ($existingCount -gt 0) {
+            [System.Windows.Forms.MessageBox]::Show("You already have an active or pending appointment of this type.")
+            $connection.Close()
+            return
+        }
+
+        # Proceed to insert appointment
+        $insertQuery = "INSERT INTO Appointments (Username, AppointmentType, Status) VALUES (@Username, @AppointmentType, 'Pending')"
+        $insertCommand = $connection.CreateCommand()
+        $insertCommand.CommandText = $insertQuery
+        $insertCommand.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Username", [Data.SqlDbType]::NVarChar, 255))).Value = $username
+        $insertCommand.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@AppointmentType", [Data.SqlDbType]::NVarChar, 255))).Value = $type
+        $insertCommand.ExecuteNonQuery()
+
+        $connection.Close()
+        [System.Windows.Forms.MessageBox]::Show("Appointment submitted!")
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show("Error: $_")
+    }
+}
+
+
+
+
+# Function to load pending appointments
+function Load-PendingAppointments {
+    $listbox.Items.Clear()
+    $query = @"
+SELECT AppointmentID, AppointmentType
+FROM Appointments
+WHERE Username = @Username AND Status = 'Pending'
+ORDER BY AppointmentID DESC
+"@
+    Write-Host "tab2"
+    try {
+        $connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
+        $connection.Open()
+
+        $command = $connection.CreateCommand()
+        $command.CommandText = $query
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Username", [Data.SqlDbType]::NVarChar, 255))).Value = $username
+        $reader = $command.ExecuteReader()
+
+        while ($reader.Read()) {
+            $appointmentId = $reader["AppointmentID"]
+            $appointmentType = $reader["AppointmentType"]
+
+            # Add appointment to list
+            $listbox.Items.Add("$appointmentType (ID: $appointmentId)")
+        }
+
+        $reader.Close()
+        $connection.Close()
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show("Error loading appointments: $_")
+    }
+}
+
+# Function to check if appointment is accepted and notify user
+function Check-AppointmentStatus {
+    $query = "SELECT AppointmentID, Status, Room FROM Appointments WHERE Username = @Username AND Status = 'In Progress' AND Acknowledged = 0 AND Notified = 0"
+    Write-Host "Checking"
+    try {
+        $connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
+        $connection.Open()
+
+        $command = $connection.CreateCommand()
+        $command.CommandText = $query
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Username", [Data.SqlDbType]::NVarChar, 255))).Value = $username
+        $reader = $command.ExecuteReader()
+
+        if ($reader.Read()) {
+            $appointmentId = $reader["AppointmentID"]
+            $room = $reader["Room"]
+
+            $reader.Close()
+
+            # Update notified to true
+            $notifyQuery = "UPDATE Appointments SET Notified = 1 WHERE AppointmentID = @AppointmentID"
+            $notifyCommand = $connection.CreateCommand()
+            $notifyCommand.CommandText = $notifyQuery
+            $notifyCommand.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@AppointmentID", [Data.SqlDbType]::Int))).Value = $appointmentId
+            $notifyCommand.ExecuteNonQuery()
+
+            # Show notification to the user
+            $result = [System.Windows.Forms.MessageBox]::Show("Your appointment has been accepted. Please go to room: $room", "Appointment Accepted", [System.Windows.Forms.MessageBoxButtons]::OK)
+            
+            if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+                # Update the appointment as acknowledged
+                $acknowledgeQuery = "UPDATE Appointments SET Acknowledged = 1 WHERE AppointmentID = @AppointmentID"
+                $acknowledgeCommand = $connection.CreateCommand()
+                $acknowledgeCommand.CommandText = $acknowledgeQuery
+                $acknowledgeCommand.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@AppointmentID", [Data.SqlDbType]::Int))).Value = $appointmentId
+                $acknowledgeCommand.ExecuteNonQuery()
+            }
+        }
+
+        $reader.Close()
+        $connection.Close()
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show("Error checking appointment status: $_")
+    }
+}
+
+# Function to cancel appointment
+function Cancel-Appointment {
+    $selectedAppointment = $listbox.SelectedItem
+    if (-not $selectedAppointment) {
+        [System.Windows.Forms.MessageBox]::Show("Please select an appointment to cancel.")
+        return
+    }
+
+    # Extract AppointmentID from the selected item
+    $appointmentId = [int]($selectedAppointment.Split(" ")[-1].Trim('(', ')'))
+
+    $currentDateTime = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+
+    $query = @"
+UPDATE Appointments
+SET Status = 'Canceled', CanceledAt = @CanceledAt
+WHERE AppointmentID = @AppointmentID
+"@
+
+    try {
+        $connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
+        $connection.Open()
+
+        $command = $connection.CreateCommand()
+        $command.CommandText = $query
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@CanceledAt", [Data.SqlDbType]::DateTime))).Value = $currentDateTime
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@AppointmentID", [Data.SqlDbType]::Int))).Value = $appointmentId
+        $command.ExecuteNonQuery()
+
+        $connection.Close()
+        [System.Windows.Forms.MessageBox]::Show("Appointment canceled successfully!")
+        Load-PendingAppointments # Refresh list after cancellation
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show("Error canceling appointment: $_")
+    }
+}
+
+# Function to load pending or in-progress appointments
+function Load-PendingOrInProgressAppointments {
+    $query = @"
+SELECT Username, AppointmentType, Room, Status
+FROM Appointments
+WHERE Status IN ('Pending', 'In Progress')
+ORDER BY CASE WHEN Status = 'In Progress' THEN 1 ELSE 2 END, AppointmentID ASC
+"@
+    Write-Host "tab3"
+    try {
+
+           
+        # Clear existing data in DataGridView
+        $dataGridView.Rows.Clear()
+        $dataGridView.Columns.Clear()
+
+        # Set up columns for DataGridView
+        $dataGridView.Columns.Add("Username", "Username")
+        $dataGridView.Columns.Add("AppointmentType", "Appointment Type")
+        $dataGridView.Columns.Add("Room", "Room")
+        $dataGridView.Columns.Add("Status", "Status")
+
+        $dataGridView.AutoSizeColumnsMode = 'None'
+        $dataGridView.Columns[0].Width = 85     # Username
+        $dataGridView.Columns[1].Width = 505    # Type
+        $dataGridView.Columns[2].Width = 50   # Room
+        $dataGridView.Columns[3].Width = 65   # Status
+        
+        # Text wrapping and row height adjustment
+        $dataGridView.DefaultCellStyle.WrapMode = 'True'
+        $dataGridView.AutoSizeRowsMode = 'AllCells'
+                
+        # Disable row selection in DataGridView
+        # $dataGridView.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::None
+
+        # Assuming $dataGridView is your DataGridView object
+        foreach ($column in $dataGridView.Columns) {
+            $column.SortMode = 'NotSortable'
+            #$column.Resizable = [System.Windows.Forms.DataGridViewTriState]::False
+        }
+
+        # Open SQL connection
+        $connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
+        $connection.Open()
+
+        $command = $connection.CreateCommand()
+        $command.CommandText = $query
+        $reader = $command.ExecuteReader()
+
+        while ($reader.Read()) {
+            $username = $reader["Username"]
+            $appointmentType = $reader["AppointmentType"]
+            $room = $reader["Room"]
+            $status = $reader["Status"]
+
+            # Add row to DataGridView
+            $dataGridView.Rows.Add($username, $appointmentType, $room, $status)
+        }
+
+        $reader.Close()
+        $connection.Close()
+
+        # Clear the current cell to prevent the first cell from being highlighted
+        $dataGridView.CurrentCell = $null
+
+        # Make sure no rows are selected
+        foreach ($row in $dataGridView.Rows) {
+            $row.Selected = $false
+        }
+       
+
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show("Error loading appointments: $_")
+    }
+}
+
+
+function Load-AppointmentTypes {
+    param ($filter = "")
+
+    $resultListBox.Items.Clear()
+
+    try {
+        $connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
+        $connection.Open()
+
+        $command = $connection.CreateCommand()
+
+        if ($filter -ne "") {
+            $command.CommandText = "SELECT TypeName FROM AppointmentTypes WHERE TypeName LIKE @Search ORDER BY TypeName"
+            $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Search", [Data.SqlDbType]::NVarChar, 255))).Value = "%$filter%"
+        } else {
+            $command.CommandText = "SELECT TypeName FROM AppointmentTypes ORDER BY TypeName"
+        }
+
+        $reader = $command.ExecuteReader()
+        while ($reader.Read()) {
+            $resultListBox.Items.Add($reader["TypeName"])
+        }
+
+        $reader.Close()
+        $connection.Close()
+
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show("Error loading appointment types: $_")
+    }
+}
+
+
+# Create ToolTip object
+$toolTip = New-Object System.Windows.Forms.ToolTip
+$toolTip.AutoPopDelay = 5000
+$toolTip.InitialDelay = 1000
+$toolTip.ReshowDelay = 500
+
+# === Main Form ===
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Appointment System"
+$form.Size = New-Object System.Drawing.Size(800, 600)
+$form.MinimumSize = New-Object System.Drawing.Size(800, 600)
+$form.MaximumSize = New-Object System.Drawing.Size(800, 600)
+$form.StartPosition = "CenterScreen"
+
+# === TabControl ===
+$tabs = New-Object System.Windows.Forms.TabControl
+$tabs.Size = $form.ClientSize
+$tabs.Dock = "Fill"
+
+# === Tab 1: Make Appointment ===
+$tab1 = New-Object System.Windows.Forms.TabPage
+$tab1.Text = "Make Appointment"
+
+# Username Label
+$usernameLabel = New-Object System.Windows.Forms.Label
+$usernameLabel.Text = "Username:"
+$usernameLabel.Location = New-Object System.Drawing.Point(225, 20)
+$usernameLabel.AutoSize = $true
+$tab1.Controls.Add($usernameLabel)
+
+# Username TextBox (readonly)
+$usernameBox = New-Object System.Windows.Forms.TextBox
+$usernameBox.Location = New-Object System.Drawing.Point(325, 18)
+$usernameBox.Size = New-Object System.Drawing.Size(200, 20)
+$usernameBox.ReadOnly = $true
+$usernameBox.Text = $username
+$tab1.Controls.Add($usernameBox)
+
+# Search TextBox
+$searchBox = New-Object System.Windows.Forms.TextBox
+$searchBox.Location = New-Object System.Drawing.Point(325, 58)
+$searchBox.Size = New-Object System.Drawing.Size(200, 20)
+$tab1.Controls.Add($searchBox)
+$toolTip.SetToolTip($searchBox, "Search for an appointment.")
+
+# Search Label
+$searchLabel = New-Object System.Windows.Forms.Label
+$searchLabel.Location = New-Object System.Drawing.Point(225, 58)
+$searchLabel.Size = New-Object System.Drawing.Size(50, 20)
+$searchLabel.Text = "Search:"
+$tab1.Controls.Add($searchLabel)
+
+# ListBox for results
+$resultListBox = New-Object System.Windows.Forms.ListBox
+$resultListBox.Location = New-Object System.Drawing.Point(135, 88)
+$resultListBox.Size = New-Object System.Drawing.Size(515, 400)
+$tab1.Controls.Add($resultListBox)
+$toolTip.SetToolTip($resultListBox, "Select an appointment")
+
+# Placeholder for connection string
+#$connectionString = "Data Source=;Initial Catalog=;Integrated Security=True"
+
+
+$searchBox.Add_TextChanged({
+    $term = $searchBox.Text.Trim()
+    Load-AppointmentTypes -filter $term
+})
+
+# Optional: capture selected item
+#$resultListBox.Add_SelectedIndexChanged({
+ #   $selected = $resultListBox.SelectedItem
+#    [System.Windows.Forms.MessageBox]::Show("You selected: $selected")
+#})
+
+
+# Submit Button
+$submitButton = New-Object System.Windows.Forms.Button
+$submitButton.Text = "Submit"
+$submitButton.Location = New-Object System.Drawing.Point(285, 495)
+$submitButton.Size = New-Object System.Drawing.Size(200, 30)
+$submitButton.Add_Click({ Submit-Appointment })
+#$submitButton.Font = $font
+$tab1.Controls.Add($submitButton)
+$toolTip.SetToolTip($submitButton, "Submit your appointment.")
+
+# === Tab 2: View Pending Appointments ===
+$tab2 = New-Object System.Windows.Forms.TabPage
+$tab2.Text = "Your Pending Appointments"
+
+# ListBox for pending appointments
+$listbox = New-Object System.Windows.Forms.ListBox
+$listbox.Location = New-Object System.Drawing.Point(10, 10)
+$listbox.Size = New-Object System.Drawing.Size(750, 450)
+#$listbox.Font = $font
+$tab2.Controls.Add($listbox)
+$toolTip.SetToolTip($listbox, "Click an appointment to select it.")
+
+# Cancel Button
+$cancelButton = New-Object System.Windows.Forms.Button
+$cancelButton.Text = "Cancel Appointment"
+$cancelButton.Location = New-Object System.Drawing.Point(280, 480)
+$cancelButton.Size = New-Object System.Drawing.Size(200, 30)
+$cancelButton.Add_Click({ Cancel-Appointment })
+$tab2.Controls.Add($cancelButton)
+$toolTip.SetToolTip($cancelButton, "Click this button cancel the selected appointment.")
+
+# === Tab 3: View Pending or In Progress Appointments ===
+$tab3 = New-Object System.Windows.Forms.TabPage
+$tab3.Text = "All Pending & In Progress Appointments"
+
+# DataGridView for pending or in progress appointments
+$dataGridView = New-Object System.Windows.Forms.DataGridView
+$dataGridView.Location = New-Object System.Drawing.Point(10, 10)
+$dataGridView.Size = New-Object System.Drawing.Size(750, 520)
+$dataGridView.AllowUserToAddRows = $false
+$dataGridView.AllowUserToDeleteRows = $false
+$dataGridView.AutoSizeColumnsMode = 'Fill'
+$dataGridView.ReadOnly = $true
+$dataGridView.Enabled = $false
+$tab3.Controls.Add($dataGridView)
+
+# Add tabs to TabControl
+$tabs.TabPages.Add($tab1)
+$tabs.TabPages.Add($tab2)
+$tabs.TabPages.Add($tab3)
+
+# Add TabControl to Form
+$form.Controls.Add($tabs)
+
+# Load pending appointments on form open
+$form.Add_Shown({ Load-PendingAppointments })
+# Load all appointments on form open
+$form.Add_Shown({ Load-PendingOrInProgressAppointments })
+$form.Add_Load({Load-AppointmentTypes})
+# Attach event handler
+$tabs.Add_SelectedIndexChanged({
+    if ($tabs.SelectedTab -eq $tab1) {
+        Write-Host "tab one clicked"
+    }
+    if ($tabs.SelectedTab -eq $tab2) {
+        Load-PendingAppointments
+        Write-Host "tab two clicked"
+    }
+     if ($tabs.SelectedTab -eq $tab3) {
+        Load-PendingOrInProgressAppointments
+        Write-Host "tab three clicked"
+    }
+})
+
+#start the timers
+# Periodically check appointment status every 5 seconds
+if (-not $global:appointmentStatusTimer) {
+    $global:appointmentStatusTimer = New-Object System.Windows.Forms.Timer
+    $global:appointmentStatusTimer.Interval = 5000
+    $global:appointmentStatusTimer.Add_Tick({ Check-AppointmentStatus })
+    $global:appointmentStatusTimer.Start()
+}
+
+# Periodically check a users pending appointments every 10 seconds
+if (-not $global:tab2RefreshTimer) {
+    $global:tab2RefreshTimer = New-Object System.Windows.Forms.Timer
+    $global:tab2RefreshTimer.Interval = 10000
+    $global:tab2RefreshTimer.Add_Tick({ Load-PendingAppointments })
+    $global:tab2RefreshTimer.Start()
+}
+
+# Periodically check all appointment statuses every 10 seconds
+if (-not $global:tab3RefreshTimer) {
+    $global:tab3RefreshTimer = New-Object System.Windows.Forms.Timer
+    $global:tab3RefreshTimer.Interval = 10000
+    $global:tab3RefreshTimer.Add_Tick({ Load-PendingOrInProgressAppointments })
+    $global:tab3RefreshTimer.Start()
+}
+
+# Show the form
+$form.ShowDialog()

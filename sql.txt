@@ -1,0 +1,162 @@
+/***** Appointments *****/
+
+USE [TestDB]
+GO
+
+/****** Object:  Table [dbo].[Appointments]    Script Date: 5/12/2025 10:20:12 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Appointments](
+	[AppointmentID] [int] IDENTITY(1,1) NOT NULL,
+	[Username] [nvarchar](100) NOT NULL,
+	[AppointmentType] [nvarchar](255) NOT NULL,
+	[Status] [nvarchar](20) NOT NULL,
+	[Room] [nvarchar](50) NULL,
+	[CreatedAt] [datetime] NOT NULL,
+	[StartedAt] [datetime] NULL,
+	[CompletedAt] [datetime] NULL,
+	[CanceledAt] [datetime] NULL,
+	[Acknowledged] [bit] NULL,
+	[Notified] [bit] NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[AppointmentID] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[Appointments] ADD  DEFAULT ('Pending') FOR [Status]
+GO
+
+ALTER TABLE [dbo].[Appointments] ADD  DEFAULT (getdate()) FOR [CreatedAt]
+GO
+
+ALTER TABLE [dbo].[Appointments] ADD  DEFAULT ((0)) FOR [Acknowledged]
+GO
+
+ALTER TABLE [dbo].[Appointments] ADD  DEFAULT ((0)) FOR [Notified]
+GO
+
+
+/***** Appointment Types *****/
+
+USE [TestDB]
+GO
+
+/****** Object:  Table [dbo].[AppointmentTypes]    Script Date: 5/12/2025 10:21:10 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[AppointmentTypes](
+	[TypeID] [int] IDENTITY(1,1) NOT NULL,
+	[TypeName] [nvarchar](255) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[TypeID] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+/*************************************************************************************************************************************************************************/
+
+CREATE TABLE AppointmentTypes (
+    TypeID INT IDENTITY PRIMARY KEY,
+    TypeName NVARCHAR(255) NOT NULL
+)
+INSERT INTO AppointmentTypes (TypeName) VALUES
+('Initial Consultation'),
+('Follow-up Visit'),
+('Routine Check-up'),
+('Lab Work'),
+('Vaccination'),
+('Therapy Session'),
+('Specialist Referral'),
+('Telehealth Appointment'),
+('Prescription Refill'),
+('Physical Exam'),
+('Mental Health Assessment'),
+('Nutritional Counseling'),
+('Occupational Therapy'),
+('Physiotherapy'),
+('Post-Surgery Follow-up'),
+('Diagnostic Imaging'),
+('Emergency Visit'),
+('Chronic Condition Management'),
+('Prenatal Check-up'),
+('Annual Wellness Exam');
+
+SELECT * FROM AppointmentTypes;
+
+
+/*************************************************************************************************************************************************************************/
+
+ALTER TABLE Appointments
+ADD CanceledAt DATETIME NULL;
+
+ALTER TABLE Appointments ADD Acknowledged BIT DEFAULT 0;
+ALTER TABLE Appointments
+ADD Notified BIT NOT NULL DEFAULT 0;
+
+
+Select * from dbo.appointments;
+--clear table
+DELETE FROM Appointments;
+--create an appointment
+INSERT INTO Appointments (Username, AppointmentType)
+VALUES ('John Doe', 'Consultation');
+
+--accept an appointment
+UPDATE Appointments
+SET Status = 'In Progress', StartedAt = GETDATE(), Room = 'B'
+WHERE AppointmentID = 51 AND Status = 'Pending';
+
+--cancel an appointment
+UPDATE Appointments
+SET Status = 'Canceled'
+WHERE AppointmentID = 2 AND Status = 'Pending';
+
+--complete an appointment
+UPDATE Appointments
+SET Status = 'Completed', CompletedAt = GETDATE()
+WHERE AppointmentID = 51 AND Status = 'In Progress';
+
+ALTER TABLE Appointments
+ALTER COLUMN AppointmentType NVARCHAR(255) NOT NULL;
+
+
+/*************************************************************************************************************************************************************************/
+
+CREATE TRIGGER trg_UpdateAppointmentStatus
+ON Appointments
+AFTER UPDATE
+AS
+BEGIN
+    -- If the Status changes to 'In Progress', set StartedAt
+    IF EXISTS (SELECT * FROM inserted WHERE Status = 'In Progress' AND StartedAt IS NULL)
+    BEGIN
+        UPDATE Appointments
+        SET StartedAt = GETDATE()
+        FROM Appointments
+        INNER JOIN inserted ON Appointments.AppointmentID = inserted.AppointmentID
+        WHERE inserted.Status = 'In Progress' AND Appointments.StartedAt IS NULL;
+    END
+
+    -- If the Status changes to 'Completed', set CompletedAt
+    IF EXISTS (SELECT * FROM inserted WHERE Status = 'Completed' AND CompletedAt IS NULL)
+    BEGIN
+        UPDATE Appointments
+        SET CompletedAt = GETDATE()
+        FROM Appointments
+        INNER JOIN inserted ON Appointments.AppointmentID = inserted.AppointmentID
+        WHERE inserted.Status = 'Completed' AND Appointments.CompletedAt IS NULL;
+    END
+END;
+
