@@ -1,0 +1,126 @@
+﻿@page "/Scheduler"
+@model RazorAppointments.Pages.Scheduler.IndexModel
+
+
+<form method="get">
+    <label for="roomSelect">Select Room:</label>
+    <select id="roomSelect" name="selectedRoomId" asp-for="SelectedRoomID" asp-items="Model.RoomsList" class="form-control" onchange="this.form.submit()">
+        <option value="0">-- Select a Room --</option>
+    </select>
+</form>
+<h3>Appointments in Selected Room</h3>
+@if (Model.SelectedRoomID == 0)
+{
+<p><em>Please select a room.</em></p>
+}
+else if (Model.AppointmentsInSelectedRoom.Any())
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Notified</th>
+                <th>Acknowledged</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var appt in Model.AppointmentsInSelectedRoom)
+            {
+                <tr>
+                    <td>@appt.AppointmentID</td>
+                    <td>@appt.Username</td>
+                    <td>@appt.AppointmentType</td>
+                    <td>@appt.Status</td>
+                    <td>@appt.CreatedAt.ToString("g")</td>
+                    <td>@(appt.Notified ? "Yes" : "No")</td>
+                    <td>@(appt.Acknowledged == true ? "Yes" : appt.Acknowledged == false ? "No" : "")</td>
+                    <td>
+                        <form method="post" asp-page-handler="Cancel" asp-route-id="@appt.AppointmentID" style="display:inline;">
+                            <input type="hidden" name="SelectedRoomID" value="@Model.SelectedRoomID" />
+                            <button type="submit" class="btn btn-danger btn-sm"
+                                    @(appt.Status == "Canceled" || appt.Status == "Complete" ? "disabled" : "")>
+                                Cancel
+                            </button>
+                        </form>
+
+                        <form method="post" asp-page-handler="Complete" asp-route-id="@appt.AppointmentID" style="display:inline;">
+                            <input type="hidden" name="SelectedRoomID" value="@Model.SelectedRoomID" />
+                            <button type="submit" class="btn btn-primary btn-sm"
+                                    @(appt.Status == "Canceled" || appt.Status == "Complete" ? "disabled" : "")>
+                                Complete
+                            </button>
+                        </form>
+
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else if (Model.SelectedRoomID > 0)
+{
+    <p><em>No appointments found for this room.</em></p>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+<h2>Scheduler</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Room</th>
+            <th>Created</th>
+            @*<th>Started</th>*@
+            @*<th>Completed</th>*@
+            @*<th>Canceled</th>*@
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var appt in Model.Appointments)
+        {
+            <tr>
+                <td>@appt.AppointmentID</td>
+                <td>@appt.Username</td>
+                <td>@appt.AppointmentType</td>
+                <td>@appt.Status</td>
+                <td>@appt.Room </td>
+                <td>@appt.CreatedAt.ToString("g")</td>
+                @*<td>@appt.StartedAt?.ToString("g") ?? ""</td>*@
+                @*<td>@appt.CompletedAt?.ToString("g") ?? ""</td>*@
+                @*<td>@appt.CanceledAt?.ToString("g") ?? ""</td>*@
+                @*<td>
+                    <form method="post" asp-page-handler="Accept">
+                        <input type="hidden" name="appointmentId" value="@appt.AppointmentID" />
+                        <input type="hidden" name="selectedRoomId" value="@Model.SelectedRoomID" />
+                        <button type="submit" class="btn btn-success btn-sm">Accept</button>
+                    </form>
+                </td>*@
+                <td>
+                    <form method="post" asp-page-handler="Accept" asp-route-id="@appt.AppointmentID">
+                        <input type="hidden" name="appointmentId" value="@appt.AppointmentID" />
+                        <input type="hidden" name="selectedRoomId" value="@Model.SelectedRoomID" />
+                        <button type="submit" class="btn btn-success" @(appt.Status == "In Progress" ? "disabled" : "")> Accept </button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+<script>
+    setInterval(() => {
+        location.reload();
+    }, 5000); // 5,000 ms = 5 seconds
+</script>
+

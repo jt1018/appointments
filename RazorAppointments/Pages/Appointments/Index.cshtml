@@ -1,0 +1,46 @@
+﻿@page
+@model RazorAppointments.Pages.Appointments.IndexModel
+
+<h2>Appointments</h2>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Room</th>
+            <th>Created</th>
+            @*<th>Started</th>*@
+            @*<th>Completed</th>*@
+            @*<th>Canceled</th>*@
+            <th>Notified</th>
+            <th>Acknowledged</th>            
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var appt in Model.Appointments)
+        {
+            <tr>
+                <td>@appt.AppointmentID</td>
+                <td>@appt.Username</td>
+                <td>@appt.AppointmentType</td>
+                <td>@appt.Status</td>
+                <td>@appt.Room </td>
+                <td>@appt.CreatedAt.ToString("g")</td>
+                @*<td>@appt.StartedAt?.ToString("g") ?? ""</td>*@
+                @*<td>@appt.CompletedAt?.ToString("g") ?? ""</td>*@
+                @*<td>@appt.CanceledAt?.ToString("g") ?? ""</td>*@
+                <td>@(appt.Notified ? "Yes" : "No")</td>
+                <td>@(appt.Acknowledged == true ? "Yes" : appt.Acknowledged == false ? "No" :"")</td>                
+            </tr>
+        }
+    </tbody>
+</table>
+<script>
+    setInterval(() => {
+        location.reload();
+    }, 5000); // 5,000 ms = 5 seconds
+</script>
+
