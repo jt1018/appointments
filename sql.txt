@@ -1,3 +1,11 @@
+CREATE TABLE Rooms (
+    RoomID INT IDENTITY(1,1) PRIMARY KEY,
+    RoomName NVARCHAR(50) NOT NULL
+);
+
+-- Example insert
+INSERT INTO Rooms (RoomName) VALUES ('Room A'), ('Room B'), ('Room C');
+
 /***** Appointments *****/
 
 USE [TestDB]
