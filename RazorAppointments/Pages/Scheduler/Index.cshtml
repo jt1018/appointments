@@ -1,13 +1,38 @@
 ﻿@page "/Scheduler"
 @model RazorAppointments.Pages.Scheduler.IndexModel
 
+@* @functions {
+    public string FilterUsername => Model.FilterUsername;
+    public string FilterType => Model.FilterType;
+} *@
+
 
 <form method="get">
     <label for="roomSelect">Select Room:</label>
     <select id="roomSelect" name="selectedRoomId" asp-for="SelectedRoomID" asp-items="Model.RoomsList" class="form-control" onchange="this.form.submit()">
         <option value="0">-- Select a Room --</option>
+        <option value="-1">Other (enter manually)</option>
     </select>
+  
 </form>
+
+@if (Model.SelectedRoomID == -1)
+{
+    <div id="customRoomDiv" style="display:block; margin-top: 10px;">
+        <label>Enter custom room name:</label>
+        <input type="text" name="CustomRoomName" class="form-control" />
+    </div>
+    <button type="submit" class="btn btn-primary mt-2">Submit</button>
+}
+@* <div class="form-group mt-3">
+    <label for="FilterUsername">Filter by Username:</label>
+    <input type="text" id="FilterUsername" name="FilterUsername" class="form-control" value="@Model.FilterUsername" />
+</div>
+
+<div class="form-group">
+    <label for="FilterType">Filter by Type:</label>
+    <input type="text" id="FilterType" name="FilterType" class="form-control" value="@Model.FilterType" />
+</div> *@
 <h3>Appointments in Selected Room</h3>
 @if (Model.SelectedRoomID == 0)
 {
@@ -120,7 +145,7 @@ else if (Model.SelectedRoomID > 0)
 </table>
 <script>
     setInterval(() => {
-        location.reload();
+    location.reload();
     }, 5000); // 5,000 ms = 5 seconds
-</script>
 
+</script>

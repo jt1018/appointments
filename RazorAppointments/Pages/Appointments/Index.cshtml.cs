@@ -5,7 +5,7 @@ using RazorAppointments.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace RazorAppointments.Pages.Appointments 
+namespace RazorAppointments.Pages.Appointments
 {
     public class IndexModel : PageModel
     {

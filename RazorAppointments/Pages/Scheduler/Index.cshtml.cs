@@ -20,6 +20,7 @@ namespace RazorAppointments.Pages.Scheduler
 
         public List<Appointment> Appointments { get; set; }
         public List<SelectListItem> RoomsList { get; set; } = new();
+        //public List<SelectListItem> UserPresenceList { get; set; } = new();
         [BindProperty]
         public int SelectedRoomID { get; set; }
         public List<Appointment> AppointmentsInSelectedRoom { get; set; } = new();
@@ -32,6 +33,21 @@ namespace RazorAppointments.Pages.Scheduler
                 .OrderBy(a => a.Status == "Pending" ? 1 : 0) // "In Progress" gets 0, comes first
                 .ThenBy(a => a.CreatedAt) // optional: order within each group by creation time
                 .ToListAsync();
+            //var twoMinutesAgo = DateTime.UtcNow.AddMinutes(-2); // or adjust window
+            //Appointments = await (
+            //    from appointment in _context.Appointments
+            //    join presence in _context.UserPresence
+            //        on appointment.Username equals presence.Username into presenceGroup
+            //    from presence in presenceGroup.DefaultIfEmpty() // left join
+            //    where appointment.Status == "Pending" || appointment.Status == "In Progress"
+            //    orderby appointment.Status == "Pending" ? 1 : 0, appointment.CreatedAt
+            //    select new AppointmentWithPresence
+            //    {
+            //        Appointment = appointment,
+            //        IsOnline = presence != null && presence.LastSeen > twoMinutesAgo
+            //    }
+            //).ToListAsync();
+
             RoomsList = await _context.Rooms
                .Select(r => new SelectListItem
                {
@@ -39,6 +55,8 @@ namespace RazorAppointments.Pages.Scheduler
                    Text = r.RoomName
                })
                .ToListAsync();
+            //UserPresenceList = await _context.UserPresence;
+            
             if (SelectedRoomID > 0)
             {
                 var selectedRoom = await _context.Rooms.FindAsync(SelectedRoomID);
@@ -94,7 +112,7 @@ namespace RazorAppointments.Pages.Scheduler
                     appt.StartedAt = DateTime.Now;
                     appt.Room = room.RoomName;
                     await _context.SaveChangesAsync();
-                }               
+                }
             }
 
             return RedirectToPage(new { selectedRoomId }); // Refresh the page

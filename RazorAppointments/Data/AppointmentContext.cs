@@ -10,6 +10,8 @@ namespace RazorAppointments.Data
 
         public DbSet<Appointment> Appointments { get; set; }
         public DbSet<Room> Rooms { get; set; }
+        //public DbSet<UserPresence> UserPresence { get; set; }
+        public DbSet<AuthorizedUser> AuthorizedUsers { get; set; }
 
     }
 }
