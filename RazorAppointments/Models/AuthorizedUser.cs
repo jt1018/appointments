@@ -7,3 +7,8 @@
     }
 
 }
+
+//CREATE TABLE AuthorizedUsers (
+//    Id INT IDENTITY PRIMARY KEY,
+//    Username NVARCHAR(255) NOT NULL UNIQUE
+//);
