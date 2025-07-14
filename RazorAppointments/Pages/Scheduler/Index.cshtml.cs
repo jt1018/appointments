@@ -24,8 +24,20 @@ namespace RazorAppointments.Pages.Scheduler
         [BindProperty]
         public int SelectedRoomID { get; set; }
         public List<Appointment> AppointmentsInSelectedRoom { get; set; } = new();
-        public async Task OnGetAsync([FromQuery] int? selectedRoomId)
+        public async Task<IActionResult> OnGetAsync([FromQuery] int? selectedRoomId)
         {
+            var currentUser = User.Identity?.Name; // e.g., "CORP\\jdoe"
+
+            var isAuthorized = await _context.AuthorizedUsers
+                .AnyAsync(u => u.Username == currentUser);
+
+            if (!isAuthorized)
+            {
+                Console.WriteLine("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+                return RedirectToPage("/AccessDenied");
+            }
+
+
             SelectedRoomID = selectedRoomId ?? 0;
 
             Appointments = await _context.Appointments
@@ -69,6 +81,7 @@ namespace RazorAppointments.Pages.Scheduler
                         .ToListAsync();
                 }
             }
+            return Page();
         }
         public async Task<IActionResult> OnPostAcceptAsync(int appointmentId, int selectedRoomId)
         {
