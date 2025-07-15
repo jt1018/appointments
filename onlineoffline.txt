@@ -1,0 +1,121 @@
+﻿#CREATE TABLE UserPresence (
+#    Username NVARCHAR(100) PRIMARY KEY,
+#    LastSeen DATETIME NOT NULL
+#);
+
+# USER PRESENCE MODEL
+#namespace RazorAppointments.Models
+#{
+#    public class UserPresence
+#    {
+#        public string Username { get; set; } // Primary Key
+#        public DateTime LastSeen { get; set; }
+#    }
+#}
+
+# Add DbSet to context
+#  public DbSet<UserPresence> UserPresence { get; set; }
+
+<#########
+
+namespace RazorAppointments.Models.ViewModels
+{
+    public class AppointmentWithPresence
+    {
+        public Appointment Appointment { get; set; }
+        public bool IsOnline { get; set; }
+    }
+}
+
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+using RazorAppointments.Data;
+using RazorAppointments.Models;
+using RazorAppointments.Models.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace RazorAppointments.Pages.Appointments 
+{
+    public class IndexModel : PageModel
+    {
+        private readonly AppointmentContext _context;
+
+        public IndexModel(AppointmentContext context)
+        {
+            _context = context;
+        }
+
+        public List<AppointmentWithPresence> Appointments { get; set; }
+
+        public async Task OnGetAsync()
+        {
+            var twoMinutesAgo = DateTime.UtcNow.AddMinutes(-2); // or adjust window
+
+            Appointments = await (
+                from appointment in _context.Appointments
+                join presence in _context.UserPresence
+                    on appointment.Username equals presence.Username into presenceGroup
+                from presence in presenceGroup.DefaultIfEmpty() // left join
+                where appointment.Status == "Pending" || appointment.Status == "In Progress"
+                orderby appointment.Status == "Pending" ? 1 : 0, appointment.CreatedAt
+                select new AppointmentWithPresence
+                {
+                    Appointment = appointment,
+                    IsOnline = presence != null && presence.LastSeen > twoMinutesAgo
+                }
+            ).ToListAsync();
+        }
+    }
+}
+
+
+###########>
+
+
+# Load SQL client assembly
+Add-Type -AssemblyName "System.Data"
+
+# Configuration
+$server = "localhost"
+$database = "TestDb"
+$username = $env:USERNAME
+$intervalSeconds = 30  # How often to update (in seconds)
+$connectionString = "Server=$server;Database=$database;Integrated Security=True"
+
+
+# Create SQL connection
+$connection = New-Object System.Data.SqlClient.SqlConnection
+$connection.ConnectionString = $connectionString
+$connection.Open()
+
+Write-Host "[$username] Presence heartbeat started. Press Ctrl+C to stop."
+
+try {
+    while ($true) {
+        # SQL MERGE to update presence
+        $sql = @"
+MERGE UserPresence AS target
+USING (SELECT '$username' AS Username) AS source
+ON target.Username = source.Username
+WHEN MATCHED THEN 
+    UPDATE SET LastSeen = GETDATE()
+WHEN NOT MATCHED THEN 
+    INSERT (Username, LastSeen) VALUES (source.Username, GETDATE());
+"@
+
+        $command = $connection.CreateCommand()
+        $command.CommandText = $sql
+        $command.ExecuteNonQuery()
+
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Updated presence for $username"
+
+        Start-Sleep -Seconds $intervalSeconds
+    }
+}
+finally {
+    $connection.Close()
+    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Presence script stopped."
+}
