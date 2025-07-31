@@ -1,0 +1,91 @@
+// CSHTML
+1.====================================================================================================
+@foreach (var type in Model.AppointmentTypes)
+{
+    <tr>
+        <td>@type.Name</td>
+        <td>@type.Duration minutes</td>
+        <td>
+            <form method="post" asp-page-handler="RequestAppointment" asp-route-appointmentTypeId="@type.AppointmentTypeID">
+                <button type="submit" class="btn btn-success btn-sm">Request</button>
+            </form>
+        </td>
+    </tr>
+}
+
+2.=========================================================================================================
+
+@foreach (var type in Model.AppointmentTypes)
+{
+    <tr>
+        <td>@type.Name</td>
+        <td>
+            <form method="post" asp-page-handler="RequestAppointment">
+                <input type="hidden" name="AppointmentType" value="@type.Name" />
+                <button type="submit" class="btn btn-success btn-sm">Request</button>
+            </form>
+        </td>
+    </tr>
+}
+
+//CSHTML.CS
+
+1.==========================================================================================================
+public async Task<IActionResult> OnPostRequestAppointmentAsync(int appointmentTypeId)
+{
+    // Use appointmentTypeId to create a new appointment request for the current user
+    // Add to DB, then redirect or show success message
+
+    return RedirectToPage("/Success");
+}
+
+
+2.============================================================================================================
+private readonly AppDbContext _context;
+
+public YourPageModel(AppDbContext context)
+{
+    _context = context;
+}
+
+[BindProperty]
+public string AppointmentType { get; set; }
+
+public async Task<IActionResult> OnPostRequestAppointmentAsync()
+{
+    var currentUser = User.Identity?.Name;
+
+    if (string.IsNullOrWhiteSpace(currentUser))
+    {
+        return Unauthorized();
+    }
+
+    var newAppointment = new Appointment
+    {
+        Username = currentUser,
+        AppointmentType = AppointmentType,
+        Status = "Pending"
+    };
+
+    _context.Appointments.Add(newAppointment);
+    await _context.SaveChangesAsync();
+
+    return RedirectToPage("/Success");
+}
+
+
+Success Message=================================================================================================
+TempData["Message"] = "Appointment submitted!";
+return RedirectToPage();
+^ instead of return RedirectToPage("/Success");
+
+//On the cshtml page 
+
+@if (TempData["Message"] != null)
+{
+    <div class="alert alert-success">@TempData["Message"]</div>
+}
+
+
+
+
