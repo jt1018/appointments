@@ -1,0 +1,27 @@
+<input type="text" id="searchBox" placeholder="Search..." />
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const searchBox = document.getElementById("searchBox");
+
+    // Restore previous value from sessionStorage
+    const saved = sessionStorage.getItem("searchValue");
+    if (saved) searchBox.value = saved;
+
+    // Focus the input automatically
+    searchBox.focus();
+
+    // Save input as user types
+    searchBox.addEventListener("input", () => {
+        sessionStorage.setItem("searchValue", searchBox.value);
+    });
+
+    // Optional: clear saved value when search is submitted
+    const form = document.getElementById("searchForm");
+    if (form) {
+        form.addEventListener("submit", () => {
+            sessionStorage.removeItem("searchValue");
+        });
+    }
+});
+</script>
