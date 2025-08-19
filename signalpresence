@@ -1,0 +1,122 @@
+
+=============================================================================================================================================================
+signalR install instructions
+=============================================================================================================================================================
+download Microsoft.AspNetCore.SignalR nuget package put it with the other packages
+download SignalR JavaScript Client put it in ~/lib/microsoft/signalr/dist/browser/signalr.js
+configure signalr in program.cs:
+	using RazorAppointments.Hubs;
+	//add singalR
+	builder.Services.AddSignalR();
+	app.UseAuthentication();
+	app.UseAuthorization();
+	app.MapHub<PresenceHub>("/presenceHub");
+=============================================================================================================================================================
+=============================================================================================================================================================
+PresenceHub Class (Hubs\)
+=============================================================================================================================================================
+using Microsoft.AspNetCore.SignalR;
+using System.Security.Principal;
+using System.Threading.Tasks;
+using System.Collections.Concurrent;
+namespace RazorAppointments.Hubs
+{
+    public class PresenceHub : Hub
+    {
+    // Store online users by username only (no domain)
+    private static readonly ConcurrentDictionary<string, string> OnlineUsers = new();
+
+    public override Task OnConnectedAsync()
+    {
+        var fullName = Context.User?.Identity?.Name ?? "";
+        var username = ExtractUsername(fullName);
+
+        OnlineUsers[Context.ConnectionId] = username;
+            Console.WriteLine($"User connected: {Context.User?.Identity?.Name ?? "Anonymous"}");
+            return base.OnConnectedAsync();
+    }
+
+    public override Task OnDisconnectedAsync(Exception exception)
+    {
+        OnlineUsers.TryRemove(Context.ConnectionId, out _);
+        return base.OnDisconnectedAsync(exception);
+    }
+
+    public static bool IsUserOnline(string username)
+    {
+        return OnlineUsers.Values.Contains(username, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private string ExtractUsername(string fullName)
+    {
+        if (string.IsNullOrEmpty(fullName)) return "";
+        if (fullName.Contains("\\")) // DOMAIN\username
+            return fullName.Split('\\')[1];
+        if (fullName.Contains("@")) // email
+            return fullName.Split('@')[0];
+            Console.WriteLine("FULLNAME +++++++++++++++++++++++++++++++++++++++++++++++++++");
+        return fullName;
+    }
+    }
+}
+=============================================================================================================================================================
+=============================================================================================================================================================
+Edits to page with table
+=============================================================================================================================================================
+@using RazorAppointments.Hubs
+...
+<th>Presence</th>
+<td>
+    @(PresenceHub.IsUserOnline(appt.Username)
+        ? "Online"
+        : "Offline")
+</td>
+
+or 
+
+<td>
+    @if (PresenceHub.IsUserOnline(appt.Username))
+    {
+        <span style="color: green; font-weight: bold;">🟢 Online</span>
+    }
+    else
+    {
+        <span style="color: gray; font-weight: bold;">⚪ Offline</span>
+    }
+</td>
+
+or (choose this if it works)
+
+@if (PresenceHub.IsUserOnline(appt.Username))
+{
+    <span class="badge bg-success">Online</span>
+}
+else
+{
+    <span class="badge bg-secondary">Offline</span>
+}
+
+or 
+<span style="color: green;">Online</span>
+<span style="color: gray;">Offline</span>
+=============================================================================================================================================================
+=============================================================================================================================================================
+Script block on page to connect to hub (only connect once)
+=============================================================================================================================================================
+
+<script src="~/lib/microsoft/signalr/dist/browser/signalr.js"></script>
+<script>
+    // Only once!
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/presenceHub")
+        .build();
+
+    connection.start()
+        .then(() => console.log("✅ Connected to PresenceHub"))
+        .catch(err => console.error("SignalR connect error:", err));
+
+    connection.on("UserPresenceChanged", (user, isOnline) => {
+        console.log("Presence changed:", user, isOnline);
+    });
+</script>
+=============================================================================================================================================================
