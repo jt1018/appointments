@@ -41,4 +41,11 @@ var isOnline = PresenceHub.IsUserOnline(appt.Username);
             row.style.display = showOnlineOnly && !isOnline ? "none" : "";
         });
     }
+    setInterval(() => {
+    $("#tableBody").load(window.location.href + " #tableBody > *", function () {
+        applyFilter(); // re-apply filter after reload
+        console.log("reloaded");
+    });
+    }, 5000);
+
 </script>
