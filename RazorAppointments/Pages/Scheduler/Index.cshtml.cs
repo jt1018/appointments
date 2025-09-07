@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using RazorAppointments.Data;
+using RazorAppointments.Hubs;
 using RazorAppointments.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -12,10 +14,12 @@ namespace RazorAppointments.Pages.Scheduler
     public class IndexModel : PageModel
     {
         private readonly AppointmentContext _context;
+        private readonly IHubContext<NotificationHub> _hubContext;
 
-        public IndexModel(AppointmentContext context)
+        public IndexModel(AppointmentContext context, IHubContext<NotificationHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         public List<Appointment> Appointments { get; set; }
@@ -83,7 +87,7 @@ namespace RazorAppointments.Pages.Scheduler
             }
             return Page();
         }
-        public async Task<IActionResult> OnPostAcceptAsync(int appointmentId, int selectedRoomId)
+        public async Task<IActionResult> OnPostAcceptAsync(int id, int selectedRoomId)
         {
             if (selectedRoomId == 0)
             {
@@ -91,7 +95,7 @@ namespace RazorAppointments.Pages.Scheduler
                 return RedirectToPage(new { selectedRoomId });
             }
 
-            var appt = await _context.Appointments.FindAsync(appointmentId);
+            var appt = await _context.Appointments.FindAsync(id);
             if (appt == null || appt.Status != "Pending")
             {
                 // Either doesn't exist or already accepted
@@ -124,7 +128,18 @@ namespace RazorAppointments.Pages.Scheduler
                     appt.Status = "In Progress";
                     appt.StartedAt = DateTime.Now;
                     appt.Room = room.RoomName;
+                    
                     await _context.SaveChangesAsync();
+                    //await _hubContext.Clients.User(appt.Username).SendAsync("ReceiveNotification", "Your appointment has been accepted!");
+                    //var hubContext = (IHubContext<NotificationHub>)HttpContext.RequestServices.GetService(typeof(IHubContext<NotificationHub>));
+
+                    //await hubContext.Clients.User(appt.Username).SendAsync(
+                    //    "ReceiveNotification",
+                    //    new { AppointmentId = appt.AppointmentID, Message = "Your appointment has been accepted!" }
+                    //);
+                    var hubContext = (IHubContext<NotificationHub>)HttpContext.RequestServices.GetService(typeof(IHubContext<NotificationHub>));
+                    await hubContext.Clients.User(appt.Username).SendAsync("ReceiveNotification", "Your appointment has been accepted!");
+
                 }
             }
 
@@ -153,6 +168,26 @@ namespace RazorAppointments.Pages.Scheduler
             }
             return RedirectToPage(new { selectedRoomId = SelectedRoomID });
         }
+
+        //public async Task<IActionResult> OnGetAppointmentsAsync(int selectedRoomId = 0)
+        //{
+        //    var appts = await _context.Appointments
+        //        .Where(a => selectedRoomId == 0 || a.RoomID == selectedRoomId)
+        //        .OrderByDescending(a => a.CreatedAt)
+        //        .Select(a => new {
+        //            a.AppointmentID,
+        //            a.Username,
+        //            a.AppointmentType,
+        //            a.Status,
+        //            a.Room,
+        //            CreatedAt = a.CreatedAt.ToString("g"),
+        //            Presence = PresenceHub.IsUserOnline(a.Username) ? "Online" : "Offline"
+        //        })
+        //        .ToListAsync();
+
+        //    return new JsonResult(appts);
+        //}
+
 
 
     }

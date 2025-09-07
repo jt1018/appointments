@@ -2,7 +2,7 @@
 @model RazorAppointments.Pages.Appointments.IndexModel
 
 <h2>Appointments</h2>
-
+<input type="text" id="searchBox" placeholder="Search..." />
 <table class="table">
     <thead>
         <tr>
@@ -16,7 +16,8 @@
             @*<th>Completed</th>*@
             @*<th>Canceled</th>*@
             <th>Notified</th>
-            <th>Acknowledged</th>            
+            <th>Acknowledged</th>
+            <th>Online?</th>
         </tr>
     </thead>
     <tbody>
@@ -33,12 +34,53 @@
                 @*<td>@appt.CompletedAt?.ToString("g") ?? ""</td>*@
                 @*<td>@appt.CanceledAt?.ToString("g") ?? ""</td>*@
                 <td>@(appt.Notified ? "Yes" : "No")</td>
-                <td>@(appt.Acknowledged == true ? "Yes" : appt.Acknowledged == false ? "No" :"")</td>                
+                <td>@(appt.Acknowledged == true ? "Yes" : appt.Acknowledged == false ? "No" :"")</td>
+                <td>
+                    <span id="status-@appt.Username" class="offline">Offline</span>
+                </td>
             </tr>
         }
     </tbody>
 </table>
+<script src="~/lib/microsoft/signalr/dist/browser/signalr.js"></script>
 <script>
+     const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/presenceHub")
+        .build();
+
+    connection.start().then(() => {
+        console.log("Connected to PresenceHub");
+    }).catch(err => console.error(err));
+
+    connection.on("UserPresenceChanged", (user, isOnline) => {
+        console.log("Presence changed:", user, isOnline);
+    });
+
+     
+        document.addEventListener("DOMContentLoaded", () => {
+        const searchBox = document.getElementById("searchBox");
+
+        // Restore previous value from sessionStorage
+        const saved = sessionStorage.getItem("searchValue");
+        if (saved) searchBox.value = saved;
+
+        // Focus the input automatically
+        searchBox.focus();
+
+        // Save input as user types
+        searchBox.addEventListener("input", () => {
+            sessionStorage.setItem("searchValue", searchBox.value);
+        });
+
+        // Optional: clear saved value when search is submitted
+        const form = document.getElementById("searchForm");
+        if (form) {
+            form.addEventListener("submit", () => {
+                sessionStorage.removeItem("searchValue");
+            });
+        }
+    });
+
     setInterval(() => {
         location.reload();
     }, 5000); // 5,000 ms = 5 seconds

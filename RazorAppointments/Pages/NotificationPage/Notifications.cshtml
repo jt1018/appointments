@@ -1,0 +1,64 @@
+﻿<input type="text" id="searchBox" placeholder="Search..." />
+
+<script>
+    // Restore previous value on page load
+    document.addEventListener("DOMContentLoaded", () => {
+        const searchBox = document.getElementById("searchBox");
+        const saved = localStorage.getItem("searchValue");
+        if (saved) searchBox.value = saved;
+
+        // Save on every change
+        searchBox.addEventListener("input", () => {
+            localStorage.setItem("searchValue", searchBox.value);
+        });
+    });
+
+    // Optional: clear the saved value if search is submitted
+    document.getElementById("searchForm").addEventListener("submit", () => {
+        localStorage.removeItem("searchValue");
+    });
+</script>
+
+@* @page
+@model NotificationsModel
+@{
+    ViewData["Title"] = "Live Notifications";
+}
+
+<h2>Appointment Notifications</h2>
+
+<div id="notificationArea"></div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        // Connect to the SignalR hub
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/appointmentHub")
+            .build();
+
+        connection.on("ReceiveAppointmentNotification", (appointmentId, message) => {
+            const div = document.getElementById("notificationArea");
+            div.innerHTML = `
+                <div style="padding:10px;border:1px solid black;">
+                    <p>${message}</p>
+                    <button onclick="respond(${appointmentId}, true)">Yes</button>
+                    <button onclick="respond(${appointmentId}, false)">No</button>
+                </div>
+            `;
+        });
+
+        connection.start().catch(err => console.error(err.toString()));
+
+        function respond(appointmentId, isReady) {
+            fetch('/Notifications?handler=Respond', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ appointmentId: appointmentId, ready: isReady })
+            }).then(() => {
+                document.getElementById("notificationArea").innerHTML = "<p>Response sent.</p>";
+            });
+        }
+    </script>
+} *@
+

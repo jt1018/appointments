@@ -1,5 +1,6 @@
 ﻿@page "/Scheduler"
 @model RazorAppointments.Pages.Scheduler.IndexModel
+@using RazorAppointments.Hubs
 
 @* @functions {
     public string FilterUsername => Model.FilterUsername;
@@ -15,6 +16,19 @@
     </select>
   
 </form>
+<div class="form-check form-switch mb-3">
+    <input class="form-check-input" type="checkbox" id="onlineOnlyToggle" />
+    <label class="form-check-label" for="onlineOnlyToggle">Show Online Only</label>
+</div>
+@* <div class="form-group mb-3">
+    <label for="usernameFilter">Filter by Username:</label>
+    <input type="text" id="usernameFilter" class="form-control" placeholder="Enter username..." />
+</div> *@
+
+@* <div class="form-group mb-3">
+    <label for="typeFilter">Filter by Appointment Type:</label>
+    <input type="text" id="typeFilter" class="form-control" placeholder="Enter appointment type..." />
+</div> *@
 
 @if (Model.SelectedRoomID == -1)
 {
@@ -44,13 +58,14 @@ else if (Model.AppointmentsInSelectedRoom.Any())
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Username</th>
-                <th>Type</th>
+                <th> Username <input type="text" id="usernameFilter" class="form-control" placeholder="Enter username..." /></th>
+                <th>Type <input type="text" id="typeFilter" class="form-control" placeholder="Enter appointment type..." /></th>
                 <th>Status</th>
                 <th>Created</th>
                 <th>Notified</th>
                 <th>Acknowledged</th>
                 <th>Actions</th>
+                <th>Status</th>
             </tr>
         </thead>
         <tbody>
@@ -82,6 +97,11 @@ else if (Model.AppointmentsInSelectedRoom.Any())
                         </form>
 
                     </td>
+                    <td>
+                        @(PresenceHub.IsUserOnline(appt.Username)
+                                        ? "Online"
+                                        : "Offline")
+                    </td>
                 </tr>
             }
         </tbody>
@@ -101,8 +121,16 @@ else if (Model.SelectedRoomID > 0)
     <thead>
         <tr>
             <th>ID</th>
-            <th>Username</th>
-            <th>Type</th>
+            <th>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span>Username</span> <input type="text" id="usernameFilter" class="form-control" placeholder="Enter username..." />
+                </div>
+            </th>
+            <th>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                   <span>Type</span><input type="text" id="typeFilter" class="form-control" placeholder="Enter appointment type..." />
+                </div>
+            </th>
             <th>Status</th>
             <th>Room</th>
             <th>Created</th>
@@ -112,26 +140,18 @@ else if (Model.SelectedRoomID > 0)
             <th>Actions</th>
         </tr>
     </thead>
-    <tbody>
+    <tbody id="tableBody">
         @foreach (var appt in Model.Appointments)
         {
-            <tr>
+            var isOnline = PresenceHub.IsUserOnline(appt.Username);
+            
+            <tr data-online ="@(isOnline ? "true" : "false")">
                 <td>@appt.AppointmentID</td>
                 <td>@appt.Username</td>
                 <td>@appt.AppointmentType</td>
                 <td>@appt.Status</td>
                 <td>@appt.Room </td>
                 <td>@appt.CreatedAt.ToString("g")</td>
-                @*<td>@appt.StartedAt?.ToString("g") ?? ""</td>*@
-                @*<td>@appt.CompletedAt?.ToString("g") ?? ""</td>*@
-                @*<td>@appt.CanceledAt?.ToString("g") ?? ""</td>*@
-                @*<td>
-                    <form method="post" asp-page-handler="Accept">
-                        <input type="hidden" name="appointmentId" value="@appt.AppointmentID" />
-                        <input type="hidden" name="selectedRoomId" value="@Model.SelectedRoomID" />
-                        <button type="submit" class="btn btn-success btn-sm">Accept</button>
-                    </form>
-                </td>*@
                 <td>
                     <form method="post" asp-page-handler="Accept" asp-route-id="@appt.AppointmentID">
                         <input type="hidden" name="appointmentId" value="@appt.AppointmentID" />
@@ -139,13 +159,84 @@ else if (Model.SelectedRoomID > 0)
                         <button type="submit" class="btn btn-success" @(appt.Status == "In Progress" ? "disabled" : "")> Accept </button>
                     </form>
                 </td>
+                <td>@(isOnline ? "Online" : "Offline")</td>
+                @* <td>
+                    @(PresenceHub.IsUserOnline(appt.Username)
+                                    ? "Online"
+                                    : "Offline")
+                </td> *@
             </tr>
         }
     </tbody>
 </table>
 <script>
+        const toggle = document.getElementById("onlineOnlyToggle");
+        const usernameInput = document.getElementById("usernameFilter");
+        const typeInput = document.getElementById("typeFilter");
+
+    // Restore saved state on page load
+    document.addEventListener("DOMContentLoaded", () => {
+        const savedToggle = sessionStorage.getItem("onlineOnlyToggle");
+        const savedUsername = sessionStorage.getItem("usernameFilter");
+        const savedType = sessionStorage.getItem("typeFilter");
+
+        if (savedToggle === "true") {
+            toggle.checked = true;
+        }
+
+        if (savedUsername) {
+            usernameInput.value = savedUsername;
+        }
+
+        if (savedType) {
+        typeInput.value = savedType;
+        }
+
+        applyFilter();
+    });
+
+    // Save state and re-apply filter when toggled
+    toggle.addEventListener("change", () => {
+        sessionStorage.setItem("onlineOnlyToggle", toggle.checked);
+        applyFilter();
+    });
+
+    // Save state and re-apply filter on input
+    usernameInput.addEventListener("input", () => {
+        sessionStorage.setItem("usernameFilter", usernameInput.value);
+        applyFilter();
+    });
+
+
+    typeInput.addEventListener("input", () => {
+        sessionStorage.setItem("typeFilter", typeInput.value);
+        applyFilter();
+    });
+
+    // Filtering function
+    function applyFilter() {
+        const showOnlineOnly = toggle.checked;
+        const usernameFilter = usernameInput.value.toLowerCase();
+        const typeFilter = typeInput.value.toLowerCase();
+
+        document.querySelectorAll("#tableBody tr").forEach(row => {
+            const isOnline = row.getAttribute("data-online") === "true";
+            const username = row.querySelector("td:nth-child(2)").textContent.toLowerCase();
+            const type = row.querySelector("td:nth-child(3)").textContent.toLowerCase();
+
+            const matchesOnline = !showOnlineOnly || isOnline;
+            const matchesUsername = !usernameFilter || username.includes(usernameFilter);
+            const matchesType = !typeFilter || type.includes(typeFilter);
+
+            row.style.display = matchesOnline && matchesUsername && matchesType ? "" : "none";
+        });
+    }
+
+    // Refresh appointments but keep filters applied
     setInterval(() => {
-    location.reload();
-    }, 5000); // 5,000 ms = 5 seconds
+        $("#tableBody").load(window.location.href + " #tableBody > *", function () {
+            applyFilter();
+        });
+    }, 5000);
 
 </script>

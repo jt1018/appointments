@@ -1,11 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using RazorAppointments.Data;
 using Microsoft.AspNetCore.Authentication.Negotiate;
+using RazorAppointments.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+
+
+
+//add singalR
+builder.Services.AddSignalR();
 
 builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
     .AddNegotiate();
@@ -26,6 +32,8 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+app.MapHub<NotificationHub>("/notificationHub");
+
 
 app.UseHttpsRedirection();
 
@@ -33,7 +41,7 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
-
+app.MapHub<PresenceHub>("/presenceHub");
 
 app.MapStaticAssets();
 app.MapRazorPages()

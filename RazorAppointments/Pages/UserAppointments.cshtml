@@ -1,0 +1,44 @@
+﻿@page
+@model RazorAppointments.Pages.UserAppointmentsModel
+@{
+
+
+}
+<div id="popup" style="display:none;">
+    <p id="popupMessage"></p>
+    <button onclick="respondToAppointment(true)">Yes</button>
+    <button onclick="respondToAppointment(false)">No</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+<script>
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/notificationHub")
+        .build();
+
+    connection.on("ReceiveNotification", function (message, appointmentId) {
+        document.getElementById("popupMessage").innerText = message;
+        document.getElementById("popup").style.display = "block";
+        window.currentAppointmentId = appointmentId;
+    });
+
+    async function startConnection() {
+        try {
+            await connection.start();
+        } catch (err) {
+            console.error(err);
+            setTimeout(startConnection, 5000);
+        }
+    }
+
+    startConnection();
+
+    function respondToAppointment(isReady) {
+        fetch(`/Appointments/Respond?id=${window.currentAppointmentId}&ready=${isReady}`, {
+            method: "POST"
+        }).then(() => {
+            document.getElementById("popup").style.display = "none";
+        });
+    }
+</script>
+
