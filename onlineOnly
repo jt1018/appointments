@@ -3,7 +3,18 @@
     <label class="form-check-label" for="onlineOnlyToggle">Show Online Only</label>
 </div>
 
+<th>
+    <div style="display: flex; align-items: center; gap: 5px;">
+        <span>Username</span> <input type="text" id="usernameFilter" class="form-control" placeholder="Enter username..." />
+    </div>
+</th>
+<th>
+    <div style="display: flex; align-items: center; gap: 5px;">
+       <span>Type</span><input type="text" id="typeFilter" class="form-control" placeholder="Enter appointment type..." />
+    </div>
+</th>
 
+<tbody id="tableBody">
 var isOnline = PresenceHub.IsUserOnline(appt.Username);
 
 <tr data-online ="@(isOnline ? "true" : "false")">
@@ -16,36 +27,73 @@ var isOnline = PresenceHub.IsUserOnline(appt.Username);
 </tr>
 
 <script>
-    const toggle = document.getElementById("onlineOnlyToggle");
+        const toggle = document.getElementById("onlineOnlyToggle");
+        const usernameInput = document.getElementById("usernameFilter");
+        const typeInput = document.getElementById("typeFilter");
 
     // Restore saved state on page load
     document.addEventListener("DOMContentLoaded", () => {
-        const savedState = sessionStorage.getItem("onlineOnlyToggle");
-        if (savedState === "true") {
+        const savedToggle = sessionStorage.getItem("onlineOnlyToggle");
+        const savedUsername = sessionStorage.getItem("usernameFilter");
+        const savedType = sessionStorage.getItem("typeFilter");
+
+        if (savedToggle === "true") {
             toggle.checked = true;
         }
+
+        if (savedUsername) {
+            usernameInput.value = savedUsername;
+        }
+
+        if (savedType) {
+        typeInput.value = savedType;
+        }
+
         applyFilter();
     });
 
-    // Save state when toggled
+    // Save state and re-apply filter when toggled
     toggle.addEventListener("change", () => {
         sessionStorage.setItem("onlineOnlyToggle", toggle.checked);
+        applyFilter();
+    });
+
+    // Save state and re-apply filter on input
+    usernameInput.addEventListener("input", () => {
+        sessionStorage.setItem("usernameFilter", usernameInput.value);
+        applyFilter();
+    });
+
+
+    typeInput.addEventListener("input", () => {
+        sessionStorage.setItem("typeFilter", typeInput.value);
         applyFilter();
     });
 
     // Filtering function
     function applyFilter() {
         const showOnlineOnly = toggle.checked;
-        document.querySelectorAll("table tbody tr").forEach(row => {
+        const usernameFilter = usernameInput.value.toLowerCase();
+        const typeFilter = typeInput.value.toLowerCase();
+
+        document.querySelectorAll("#tableBody tr").forEach(row => {
             const isOnline = row.getAttribute("data-online") === "true";
-            row.style.display = showOnlineOnly && !isOnline ? "none" : "";
+            const username = row.querySelector("td:nth-child(2)").textContent.toLowerCase();
+            const type = row.querySelector("td:nth-child(3)").textContent.toLowerCase();
+
+            const matchesOnline = !showOnlineOnly || isOnline;
+            const matchesUsername = !usernameFilter || username.includes(usernameFilter);
+            const matchesType = !typeFilter || type.includes(typeFilter);
+
+            row.style.display = matchesOnline && matchesUsername && matchesType ? "" : "none";
         });
     }
+
+    // Refresh appointments but keep filters applied
     setInterval(() => {
-    $("#tableBody").load(window.location.href + " #tableBody > *", function () {
-        applyFilter(); // re-apply filter after reload
-        console.log("reloaded");
-    });
+        $("#tableBody").load(window.location.href + " #tableBody > *", function () {
+            applyFilter();
+        });
     }, 5000);
 
 </script>
