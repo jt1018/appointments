@@ -1,0 +1,44 @@
+<div class="form-check form-switch mb-3">
+    <input class="form-check-input" type="checkbox" id="onlineOnlyToggle" />
+    <label class="form-check-label" for="onlineOnlyToggle">Show Online Only</label>
+</div>
+
+
+var isOnline = PresenceHub.IsUserOnline(appt.Username);
+
+<tr data-online ="@(isOnline ? "true" : "false")">
+    <td>@(isOnline ? "Online" : "Offline")</td>
+    @* <td>
+        @(PresenceHub.IsUserOnline(appt.Username)
+                        ? "Online"
+                        : "Offline")
+    </td> *@
+</tr>
+
+<script>
+    const toggle = document.getElementById("onlineOnlyToggle");
+
+    // Restore saved state on page load
+    document.addEventListener("DOMContentLoaded", () => {
+        const savedState = sessionStorage.getItem("onlineOnlyToggle");
+        if (savedState === "true") {
+            toggle.checked = true;
+        }
+        applyFilter();
+    });
+
+    // Save state when toggled
+    toggle.addEventListener("change", () => {
+        sessionStorage.setItem("onlineOnlyToggle", toggle.checked);
+        applyFilter();
+    });
+
+    // Filtering function
+    function applyFilter() {
+        const showOnlineOnly = toggle.checked;
+        document.querySelectorAll("table tbody tr").forEach(row => {
+            const isOnline = row.getAttribute("data-online") === "true";
+            row.style.display = showOnlineOnly && !isOnline ? "none" : "";
+        });
+    }
+</script>
